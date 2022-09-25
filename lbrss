@@ -11,6 +11,8 @@ function filter_html {
 	cat "$1" | xmlstarlet unesc | sponge "$1"
 }
 
+[ ! -d "$feedsDir" ] && mkdir -p "$feedsDir"
+
 grep -v "^#" "$baseDir"/urls | while read -r url; do
 	name=$(cut -f 1 <<< "$url")
 	url=$(cut -f 2 <<< "$url")
