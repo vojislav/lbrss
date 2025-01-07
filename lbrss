@@ -3,8 +3,8 @@
 export DISPLAY=:0
 
 baseDir="$HOME/.config/lbrss"
-
 feedsDir="$baseDir/feeds"
+NTFY_URL="https://ntfy.lazic.xyz/lbrss"
 
 function filter_html {
 	[ ! -f "$1" ] && return
@@ -13,15 +13,17 @@ function filter_html {
 
 [ ! -d "$feedsDir" ] && mkdir -p "$feedsDir"
 
-grep -v "^#" "$baseDir"/urls | while read -r url; do
-	name=$(cut -f 1 <<< "$url")
-	url=$(cut -f 2 <<< "$url")
+grep -v "^#" "$baseDir"/users | while read -r user; do
+	username=$(cut -d '(' -f 1 <<< "$user")
+	url="https://letterboxd.com/$username/rss/"
+	name="$(grep -Po "(?<=\().*(?=\))" <<< "$user")"
+	[ -z "$name" ] && name="$username"
 
-	orig_file="$feedsDir/${name}.xml"
+	orig_file="$feedsDir/${username}.xml"
 	[ ! -f "$orig_file" ] && wget --quiet "$url" -O "$orig_file" &&
 		echo "New feed: $name" && filter_html "$orig_file" && continue
 
-	new_file="$feedsDir/${name}_new.xml"
+	new_file="$feedsDir/${username}_new.xml"
 	wget --quiet "$url" -O "$new_file"
 
 	filter_html "$new_file"
@@ -50,7 +52,6 @@ grep -v "^#" "$baseDir"/urls | while read -r url; do
 		rating=$(grep -Po "(?<=<letterboxd:memberRating>).*(?=</letterboxd:memberRating>)" <<< "$film")
 		[ "$rating" ] && ratingText=" and rated" && rating+=" stars"
 
-
 		if [ "$reviewText" ] && [ "$ratingText" ]; then
 			reviewText=", $reviewText"
 		elif [ "$reviewText" ]; then
@@ -59,13 +60,22 @@ grep -v "^#" "$baseDir"/urls | while read -r url; do
 
 		link=$(grep -Po "(?<=<link>).*(?=</link>)" <<< "$film")
 
-		# format for links in notifications
-		# <a href=\"https://forums.bunsenlabs.org/\">BL</a>
-		notify-send --icon "$baseDir/lb.png" "lbrss" "<a href=\"$link\">$name ${re}watched${reviewText}${ratingText} $title ($year) $rating</a>"
+		if [ "$1" == "-d" ]; then
+			curl \
+				-H "Title: lbrss" \
+				-H "Tags: movie_camera" \
+				-H "Actions: view, Open, $link, clear=true;" \
+				-d "$name ${re}watched${reviewText}${ratingText} $title ($year) $rating" \
+			"$NTFY_URL"
+		else
+			# format for links in notifications
+			# <a href=\"https://forums.bunsenlabs.org/\">BL</a>
+			notify-send --icon "$baseDir/lb.png" "lbrss" "<a href=\"$link\">$name ${re}watched${reviewText}${ratingText} $title ($year) $rating</a>"
 
-		# optional system beep
-		# first enable kernel module https://askubuntu.com/a/19909/629804
-		beep
+			# optional system beep
+			# first enable kernel module https://askubuntu.com/a/19909/629804
+			beep
+		fi
 	done
 
 	mv "$new_file" "$orig_file"
